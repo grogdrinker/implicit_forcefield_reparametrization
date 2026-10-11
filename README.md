@@ -152,5 +152,8 @@ Change the ensemble with `--temperature`, `--friction`, `--timestep`.
 ## License & citation
 
 Licensed under the **Apache License 2.0** — see the [`LICENSE`](LICENSE) file.
-If you use this in academic work, please cite the accompanying paper (see the
-repository page).
+If you use this in academic work, please cite the accompanying paper ).
+
+## Bugs report & questions
+
+for any bug report or question, please send an email to gabriele.orlando@umontpellier.fr
