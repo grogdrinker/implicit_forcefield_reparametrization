@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "implicit-forcefield-reparametrization"
+version = "0.1.0"
+description = "Bilevel reparametrization of molecular-mechanics force fields via the implicit function theorem"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Satya Tamby" },
+    { name = "Ardite Bujupaj" },
+    { name = "Gabriele Orlando", email = "orlando.gabriele89@gmail.com" },
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+]
+keywords = ["force field", "molecular dynamics", "implicit function theorem",
+            "bilevel optimization", "OpenMM", "amyloid"]
+# Pip-installable runtime dependencies. NOTE: OpenMM and PDBFixer are also
+# required but are NOT listed here because PDBFixer is not on PyPI and OpenMM's
+# GPU builds come from conda-forge -- install both with:
+#     conda install -c conda-forge openmm pdbfixer
+dependencies = [
+    "numpy",
+    "torch",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Optional graphical interface (`iftff gui`). Tkinter itself is a system
+# component (ships with standard Python; `conda install tk` if missing) and so
+# cannot be listed here; this adds the modern theme on top of it.
+gui = [
+    "sv-ttk",
+]
+
+[project.scripts]
+iftff = "iftff.cli:main"
+
+[project.urls]
+Repository = "https://github.com/grogdrinker/implicit_forcefield_reparametrization"
+
+[tool.setuptools]
+packages = ["iftff", "iftff.src", "iftff.gui"]
+
+[tool.setuptools.package-data]
+iftff = ["data/*.xml"]
