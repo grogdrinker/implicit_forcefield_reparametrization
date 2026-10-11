@@ -1,96 +1,160 @@
-# implicit_forcefield_reparametrization
+# iftff — implicit-function-theorem force-field optimization
 
-Bilevel reparametrization of molecular-mechanics force fields via the implicit
-function theorem (IFT). Starting from stock AMBER99SB, `iftff` tunes the
-force-field parameters so that experimental structures sit at minima of the
-energy landscape — using OpenMM for the energy minimization and PyTorch for the
-gradients.
+`iftff` trains molecular-mechanics **force fields** so that experimentally
+determined structures sit at **minima** of the modeled energy surface, and then
+lets you run **energy minimization** and **molecular dynamics** with the force
+field you trained.
 
-## Installation
+It re-parametrizes the standard **AMBER** force field by attaching one
+dimensionless multiplier to every parameter (bonds, angles, charges, van der
+Waals) — `1.0` means "unchanged" — and learns those multipliers by
+back-propagating through the *result* of energy minimization using the
+**implicit function theorem**, so it never has to differentiate through the
+minimizer's iterations. The result is a normal OpenMM force-field XML you can
+use anywhere.
 
-```bash
-conda install -c conda-forge openmm pdbfixer   # not on PyPI
-pip install -e .                               # installs the `iftff` command
-pip install -e ".[gui]"                        # optional graphical interface
+---
+
+## Install
+
+OpenMM and PDBFixer come from **conda** (PDBFixer isn't on PyPI, and OpenMM's
+GPU builds live on conda-forge); everything else is installed by pip:
+
+```sh
+conda create -n iftff python=3.11
+conda activate iftff
+conda install -c conda-forge openmm pdbfixer      # the two conda-only deps
+pip install -e .                                  # the iftff package + tool
 ```
 
-Requires Python ≥ 3.9.
+That installs the `iftff` Python package, its pip dependencies (NumPy, PyTorch,
+tqdm), and the **`iftff` command-line tool**. A CUDA GPU is used automatically
+if available, but everything also runs on CPU.
 
-## Quick start
+Check it worked:
 
-```bash
-bash example.sh     # minimize → train → minimize → short MD, on a bundled structure
+```sh
+iftff --help
 ```
 
-or call the commands directly:
+---
 
-```bash
-iftff minimize --pdb examples/8IZZ.pdb --xml iftff/data/amber99sb.xml --output-dir out/min
-iftff train    --pdb-dir examples --n-epochs 3 --reg-lambda 0.01 --output-xml out/trained.xml
-iftff md       --pdb examples/8IZZ.pdb --xml out/trained.xml --output-dir out/md
-iftff gui      # the above, in a window
+## Run the example first
+
+A complete, self-contained example ships in the repo. It needs nothing but the
+install above — one small amyloid structure (`examples/8IZZ.pdb`) is bundled.
+
+```sh
+bash example.sh
 ```
 
-Five ready-to-use reparametrized force fields ship in `iftff/data/`
-(unregularized + λ = 0.005 / 0.01 / 0.05 / 0.1).
+In under a minute it runs the whole workflow on that structure and writes the
+results to `example_output/`:
 
-## Package layout
+1. **minimize** it with stock AMBER (the baseline);
+2. **train** a force field from it → `example_output/trained.xml`;
+3. **minimize** it again with the trained force field;
+4. run a short **MD** trajectory with the trained force field.
 
-```
-iftff/
-  cli.py            `iftff <command>` entry point (train | md | minimize | gui)
-  train.py          outer loop: reparametrize a force field from a set of PDBs
-  run.py            minimize / run MD with a given force-field XML
-  __init__.py       public API + forcefield() path resolver
-  data/*.xml        stock amber99sb + the five reparametrized force fields
-  gui/              Tkinter graphical interface
-  src/
-    force_field.py  differentiable (PyTorch) AMBER energy and forces
-    ift.py          d RMSD / d parameters via the implicit function theorem
-    openmm_utils.py build systems, energy-minimize, run MD (OpenMM)
-    topology.py     PDB → topology and atom-class mappings
-    xml_io.py       read / write OpenMM force-field XML
-    config.py       TrainingConfig / SimulationConfig
-    utils.py        Kabsch RMSD, checkpoints
-examples/8IZZ.pdb   small amyloid used by example.sh
+Open `example.sh` — it is heavily commented and is the fastest way to learn the
+three commands below.
+
+---
+
+## Prefer a window? `iftff gui`
+
+```sh
+iftff gui
 ```
 
-## How it works
+Opens a small graphical interface with one tab per task (Train / Minimize / MD).
+Pick your files, adjust any parameter (the common ones are shown; the rest live
+under **Advanced options**), and press **Run** — the output streams live in the
+log at the bottom. It runs exactly the same commands described below and prints
+each one, so it's also a painless way to learn the command line.
 
-Two nested loops. The **inner** loop energy-minimizes each structure under the
-current parameters (OpenMM). The **outer** loop measures the RMSD between the
-minimized and the experimental structure and updates the parameters to reduce it
-(Adam). The outer gradient is obtained from the converged minimum alone via the
-implicit function theorem,
+The GUI needs optional extras (a modern theme; Tkinter is part of standard
+Python). Install them with:
 
-```
-∇θ L = − (∂²F / ∂X∂θ)ᵀ H⁻¹ ∇X L ,   H = ∂²F / ∂X²  at the minimum,
-```
-
-so its cost is independent of the number of minimization steps and the minimizer
-is used as a black box. Parameters are trained as multipliers on the stock AMBER
-values (1.0 = unchanged); dihedral and 1–4 nonbonded terms are held fixed.
-
-## Python API
-
-```python
-import iftff
-
-iftff.forcefield("amber99sb")     # path to stock AMBER XML (training starts here)
-iftff.forcefield("lambda0.01")    # path to a reparametrized force field
-iftff.DEFAULT_FORCEFIELD          # recommended production force field (λ = 0.01)
-
-from iftff import (
-    create_base_system_and_modeller,  # PDB + XML → OpenMM system
-    minimize_with_system,             # energy-minimize to a stationary point
-    compute_ift_gradient,             # d RMSD / d parameters (IFT)
-    AmberForceFieldMP,                # differentiable AMBER force field
-    kabsch_rmsd,                      # heavy-atom RMSD after Kabsch alignment
-    TrainingConfig, SimulationConfig,
-    load_xml, dump_xml,               # read / write force-field XML
-)
+```sh
+pip install -e ".[gui]"      # or:  pip install "implicit-forcefield-reparametrization[gui]"
 ```
 
-## License
+If they're missing, `iftff gui` just tells you this and exits — the `train` /
+`minimize` / `md` commands don't need them. (If Tkinter itself is missing on a
+minimal Python, add it with `conda install tk` or your OS `python3-tk` package.)
 
-Apache-2.0 — see [`LICENSE`](LICENSE).
+## The three commands
+
+The tool does three things. The natural order is **train → minimize / md**:
+train a force field from your structures, then use that force field.
+
+```
+iftff train     --pdb-dir <dir>  --output-xml <ff.xml>   # structures -> trained force field
+iftff minimize  --pdb <pdb>      [--xml <ff.xml>]         # energy-minimize one structure
+iftff md        --pdb <pdb>      [--xml <ff.xml>]         # run molecular dynamics
+iftff gui                                                 # the same, in a window
+```
+
+Every command prints its full option list with `iftff <command> --help`.
+
+**The default force field is the bundled reparametrised one** (reg=0.01) — the
+recommended production force field this method produces. So `--xml` is optional
+for `minimize` and `md`; pass it only to use a different force field (a force
+field you trained, or stock AMBER via `--xml $(python -c "import iftff;print(iftff.forcefield('amber99sb'))")`).
+The five bundled reparametrised force fields ship inside the package
+(`iftff/data/AmberReparametrised_*.xml`).
+
+### 1. `iftff train` — learn a force field from structures
+
+Point it at a folder of PDB files; it learns parameter multipliers so those
+structures sit at energy minima, and writes a trained force-field XML.
+
+```sh
+iftff train \
+    --pdb-dir  my_structures/ \   # folder of PDB files to fit
+    --n-epochs 10 \               # outer optimization epochs
+    --lr       1e-3 \             # Adam learning rate
+    --reg-lambda 0.01 \           # keep parameters near stock AMBER (0 = no penalty)
+    --output-xml my_ff.xml        # the trained force field
+```
+
+**Input:** a directory of PDBs. **Output:** `my_ff.xml` (the trained force
+field, a normal OpenMM XML), a per-epoch checkpoint XML in `--checkpoint-dir`,
+and `per_protein_losses.tsv` (the per-structure RMSD each epoch).
+
+`--reg-lambda` controls how far training may pull parameters from stock AMBER:
+higher = stay closer to the original, lower = fit the structures more
+aggressively. Start around `0.01`.
+
+### 2. `iftff minimize` — energy-minimize one structure
+
+```sh
+iftff minimize --pdb my_protein.pdb --output-dir out/      # uses the default (reg=0.01) FF
+iftff minimize --pdb my_protein.pdb --xml my_ff.xml --output-dir out/   # or your own FF
+```
+
+Fixes the structure (adds missing atoms/hydrogens with PDBFixer),
+energy-minimizes it with the force field, prints `Minimized: RMSD=… nm` (how far
+the heavy atoms moved from the input, Kabsch-aligned, hydrogens excluded), and
+writes the minimized PDB — then stops.
+
+### 3. `iftff md` — run molecular dynamics
+
+```sh
+iftff md --pdb my_protein.pdb --output-dir out/ \
+    --n-steps 250000 --traj-interval 1000
+```
+
+Same preparation and minimization, then Langevin MD (defaults: 300 K, friction
+1 ps⁻¹, 2 fs timestep). `--n-steps 250000` at 2 fs is 0.5 ns. Prints the final
+RMSD and drift and writes `trajectories/trajectory.pdb` plus a `report.txt`.
+Change the ensemble with `--temperature`, `--friction`, `--timestep`.
+
+---
+
+## License & citation
+
+Licensed under the **Apache License 2.0** — see the [`LICENSE`](LICENSE) file.
+If you use this in academic work, please cite the accompanying paper (see the
+repository page).
