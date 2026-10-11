@@ -63,26 +63,22 @@ three commands below.
 
 ## Prefer a window? `iftff gui`
 
+Install the GUI with:
+
+```sh
+pip install -e ".[gui]"
+```
+
+then launch it:
+
 ```sh
 iftff gui
 ```
 
-Opens a small graphical interface with one tab per task (Train / Minimize / MD).
-Pick your files, adjust any parameter (the common ones are shown; the rest live
-under **Advanced options**), and press **Run** — the output streams live in the
-log at the bottom. It runs exactly the same commands described below and prints
-each one, so it's also a painless way to learn the command line.
-
-The GUI needs optional extras (a modern theme; Tkinter is part of standard
-Python). Install them with:
-
-```sh
-pip install -e ".[gui]"      # or:  pip install "implicit-forcefield-reparametrization[gui]"
-```
-
-If they're missing, `iftff gui` just tells you this and exits — the `train` /
-`minimize` / `md` commands don't need them. (If Tkinter itself is missing on a
-minimal Python, add it with `conda install tk` or your OS `python3-tk` package.)
+It opens a small graphical interface with one tab per task (Train / Minimize /
+MD): pick your files, adjust any parameter (the common ones are shown; the rest
+live under **Advanced options**), and press **Run** — the output streams live in
+the log at the bottom. It runs the same commands as the CLI and prints each one.
 
 ## The three commands
 
